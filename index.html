@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titanic: ML Decides Your Faith</title>
+    <style>
+        #start-screen {
+            position: relative; top: 550px; left: 190px; width: 100vw; height: 100vh;
+            background: transparent; /* Removed the darkening overlay */
+            z-index: 90; display: flex;
+            /* flex-direction: row; justify-content: left; align-items: center; */
+            pointer-events: auto;
+        }
+        #start-ui { display: flex; flex-direction: column; align-items: center; z-index: 95; }
+        #start-title { font-size: 5rem; color: #ffffff; margin-bottom: 5px; letter-spacing: 6px; text-align: center; text-shadow: 6px 6px 0px #1C1C24, 0px 0px 20px rgba(0,0,0,0.8);}
+        #start-subtitle { font-size: 1.5rem; color: #ffe600; margin-bottom: 40px; text-align: center; text-shadow: 3px 3px 0px #1C1C24, 0px 0px 15px rgba(0,0,0,0.8);}
+        
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace; background-color: #1C1C24; color: #fff; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; cursor: crosshair;}
+        
+        .pixel-text { text-transform: uppercase; text-shadow: 2px 2px 0px #1C1C24; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5;}
+        
+        /* Start Screen UI */
+        .play-btn {
+            font-size: 2.5rem; 
+            color: #f9f9f9; 
+            background: hsl(0, 0%, 55%); 
+            border: 4px solid #6b6b6b; 
+            
+            /* MODIFICATIONS FOR WIDER BUTTON */
+            padding: 15px 120px;       /* Increased left and right padding from 60px to 120px */
+            min-width: 600px;          /* Forces the button to be at least 400px wide */
+            letter-spacing: 10px;      /* Spreads the "P L A Y" text out slightly */
+            
+            cursor: pointer; 
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold; 
+            box-shadow: 8px 8px 0px #1C1C24;
+            transition: all 0.1s ease-in-out;
+            text-shadow: 3px 3px 0px #1C1C24;
+        }
+
+        /* Optional: Make the hover effect snap properly with the new width */
+        .play-btn:hover {
+            background: hsl(0, 0%, 85%); /* Slightly lighter on hover */
+            transform: translate(3px, 3px);
+        }
+
+        /* Wood Theme Overlays */
+        #title-bar { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 1.4rem; background: rgba(28, 28, 36, 0.9); padding: 10px 0; border-bottom: 3px solid #885A3F; display: none; color: #A76336;}
+        
+        #teleport-warning { position: absolute; top: 80px; width: 100%; text-align: center; font-size: 1.2rem; color: #DF3D27; display: none; text-shadow: 0 0 10px #A76336; }
+
+        #controls-hint { position: absolute; bottom: 20px; right: 20px; background: rgba(28, 28, 36, 0.9); padding: 12px; border: 2px solid #885A3F; border-radius: 5px; font-size: 0.85rem; pointer-events: none; text-align: right; line-height: 1.4; display: none;}
+
+
+        /* Wood Theme Form */
+        #booking-form {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #1C1C24; padding: 25px; border: 4px solid #885A3F; width: 340px;
+            z-index: 20; display: none; pointer-events: auto; box-shadow: 8px 8px 0px #5C5454;
+        }
+        .form-group { margin-bottom: 10px; text-align: left; }
+        .form-group label { display: block; font-size: 0.75rem; color: #A76336; margin-bottom: 3px; font-weight: bold; }
+        input[type=text], input[type=number], select { width: 100%; padding: 6px; border: 2px solid #885A3F; background: #5C5454; color: #fff; font-family: 'Courier New', Courier, monospace; box-sizing: border-box; outline: none; }
+        input:read-only { color: #ccc; border-color: #5C5454; background: #1C1C24; }
+        button.action-btn { width: 100%; padding: 12px; margin-top: 15px; background: #A76336; color: #fff; border: 2px solid #885A3F; font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 1.1rem; cursor: pointer; box-shadow: 4px 4px 0px #5C5454;}
+        button.action-btn:hover { background: #DF3D27; transform: translate(2px, 2px); box-shadow: 2px 2px 0px #5C5454; }
+
+        #loading-screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: #1C1C24; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s; pointer-events: auto;}
+        
+        #fade-screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 1s;}
+        
+        /* Video Modals & Overlays - NO FILTERS */
+        .fullscreen-video { 
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+            object-fit: contain; background: black; z-index: 110; display: none; 
+            image-rendering: high-quality;
+            transform: translateZ(0);
+        }
+
+        #vid-menu { z-index: 85; object-fit: cover; } /* No darkening filters anymore */
+        
+        #outcome-screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 120; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(28, 28, 36, 0.9); border: 8px solid #885A3F; box-sizing: border-box;}
+        #outcome-title { font-size: 3rem; margin-bottom: 20px; text-align: center; }
+        .survived-text { color: #A76336; text-shadow: 0 0 10px #DF3D27; }
+        .perished-text { color: #5C5454; text-shadow: 0 0 10px #000; }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen" class="pixel-text">
+        <h2 id="loading-text" style="color:#A76336;">LOADING ASSETS (0%)...</h2>
+        <div id="loading-errors" style="color: #DF3D27; font-size: 0.8rem; margin-top: 10px; max-height: 100px; overflow-y: auto;"></div>
+        
+        <!-- This button appears at 100% -->
+        <button id="btn-enter" class="play-btn" style="display:none; margin-top: 30px; font-size: 1.5rem; padding: 15px 60px; min-width: 0;" onclick="enterMenu()">ENTER MENU</button>
+    </div>
+
+    <!-- Intro / Start Screen with Looping Video -->
+    <video id="vid-menu" class="fullscreen-video" src="/TitleCard/main-menu.mp4" autoplay loop playsinline style="z-index: 85;"></video>
+    <div id="start-screen" class="pixel-text" style="display:none;">
+        <div id="start-ui">
+            <button class="play-btn" onclick="startGame()">PLAY</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="fade-screen"></div>
+
+    <div id="ui-layer">
+        <div id="title-bar" class="pixel-text">EXPLORE THE TITANIC • PRESS [U] TO BOOK CABIN</div>
+        <div id="teleport-warning" class="pixel-text">PATH BLOCKED! CLICK A GLOWING DECK AREA TO TELEPORT</div>
+        <div id="controls-hint" class="pixel-text">
+            <b>[W][A][S][D]</b> Move<br>
+            <b>[SHIFT]</b> Run<br>
+            <b>[E]</b> Map Editor<br>
+            <b>[U]</b> Book Ticket<br>
+            <b>[CLICK]</b> Teleport<br>
+            <b>[SCROLL]</b> Zoom | <b>[DRAG]</b> Pan
+        </div>
+    </div>
+
+    <!-- Booking Form (Male Hardcoded) -->
+    <div id="booking-form" class="pixel-text">
+        <h3 style="margin-top: 0; border-bottom: 2px solid #885A3F; padding-bottom: 5px; color: #A76336;">MANIFEST</h3>
+        <div class="form-group"><label>PCLASS:</label><input type="text" id="in-pclass" readonly></div>
+        <div class="form-group"><label>AGE:</label><input type="number" id="in-age" value="28" min="1" max="100"></div>
+        <div class="form-group"><label>SIBSP:</label><input type="number" id="in-sibsp" value="0" min="0" max="8"></div>
+        <div class="form-group"><label>PARCH:</label><input type="number" id="in-parch" value="0" min="0" max="9"></div>
+        <div class="form-group"><label>TICKET:</label><input type="text" id="in-ticket" value="PC 17599"></div>
+        <div class="form-group"><label>FARE:</label><input type="number" id="in-fare" value="32" min="0"></div>
+        <div class="form-group"><label>EMBARKED:</label><select id="in-embarked"><option value="S">SOUTHAMPTON</option><option value="C">CHERBOURG</option><option value="Q">QUEENSTOWN</option></select></div>
+        <button class="action-btn" onclick="embraceFate()" style="background:#DF3D27; border-color:#DF3D27;">FACE DESTINY</button>
+        <button class="action-btn" onclick="document.getElementById('booking-form').style.display='none'; gameState='sailing';" style="background:#5C5454; margin-top:5px;">CANCEL</button>
+    </div>
+
+    <!-- Cinematic Videos -->
+    <video id="vid-sinking" class="fullscreen-video" src="/cinematics/Titanic-sinking.mp4" type="video/mp4" preload="none"></video>
+    <video id="vid-survived" class="fullscreen-video" src="/cinematics/Survived.mp4" type="video/mp4" preload="none"></video>
+    <video id="vid-perished" class="fullscreen-video" src="/cinematics/Perished.mp4" type="video/mp4" preload="none"></video>
+
+    <!-- Final Outcome Overlay -->
+    <div id="outcome-screen" class="pixel-text">
+        <div id="outcome-title"></div>
+        <button class="action-btn" onclick="location.reload()" style="width: 250px; padding: 15px; font-size: 1.3rem; background:#DF3D27;">[ RESTART ]</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let cw = canvas.width = window.innerWidth;
+        let ch = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            cw = canvas.width = window.innerWidth;
+            ch = canvas.height = window.innerHeight;
+            constrainCamera();
+        });
+
+        // --- 1. ASSET & GRID LOADING ---
+        let loadedImagesCount = 0;
+        let totalImagesToLoad = 23; 
+        let gridLoaded = false;
+        
+        const images = { ship: null, sea: [], smoke: [], wave: [], clouds: [], seaWaveTop: null, portal: [] };
+
+        const assetPaths = {
+            ship: '/map-animation/Titanic-ship.png',
+            sea: ['/map-animation/1st-Sea.png', '/map-animation/2nd-Sea.png', '/map-animation/3rd-sea.png'],
+            smoke: ['/map-animation/1st-Smoke.png', '/map-animation/2nd-smoke.png', '/map-animation/3rd-smoke.png'],
+            wave: ['/map-animation/Bow-wave-1.png', '/map-animation/Bow-Wave-2.png'],
+            clouds: ['/map-animation/cloud-1.png', '/map-animation/Cloud-2.png', '/map-animation/Cloud-3.png'],
+            seaWaveTop: '/map-animation/sea-wave-1.png'
+        };
+
+        const charConfig = {
+            "back": { 
+                "idle": { "path": "/Character Sequence/Back - Idle/", "frameCount": 16, "filePrefix": "Back - Idle_" }, 
+                "walking": { "path": "/Character Sequence/Back - Walking/", "frameCount": 20, "filePrefix": "Back - Walking_" },
+                "running": { "path": "/Character Sequence/Back - Running/", "frameCount": 12, "filePrefix": "Back - Running_" }
+            },
+            "front": { 
+                "idle": { "path": "/Character Sequence/Front - Idle/", "frameCount": 16, "filePrefix": "Front - Idle_" }, 
+                "walking": { "path": "/Character Sequence/Front - Walking/", "frameCount": 20, "filePrefix": "Front - Walking_" },
+                "running": { "path": "/Character Sequence/Front - Running/", "frameCount": 12, "filePrefix": "Front - Running_" }
+            },
+            "left": { 
+                "idle": { "path": "/Character Sequence/Left - Idle/", "frameCount": 16, "filePrefix": "Left - Idle_" }, 
+                "walking": { "path": "/Character Sequence/Left - Walking/", "frameCount": 20, "filePrefix": "Left - Walking_" },
+                "running": { "path": "/Character Sequence/Left - Running/", "frameCount": 12, "filePrefix": "Left - Running_" }
+            },
+            "right": { 
+                "idle": { "path": "/Character Sequence/Right - Idle/", "frameCount": 16, "filePrefix": "Right - Idle_" }, 
+                "walking": { "path": "/Character Sequence/Right - Walking/", "frameCount": 20, "filePrefix": "Right - Walking_" },
+                "running": { "path": "/Character Sequence/Right - Running/", "frameCount": 12, "filePrefix": "Right - Running_" }
+            }
+        };
+
+        const charImages = {}; 
+
+        function forceStart() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+            const vidMenu = document.getElementById('vid-menu');
+            vidMenu.style.display = 'block';
+            vidMenu.play().catch(e => console.warn("Autoplay blocked"));
+        }
+
+        function updateLoadingScreen() {
+            const pct = Math.floor((loadedImagesCount / totalImagesToLoad) * 100);
+            document.getElementById('loading-text').innerText = `LOADING ASSETS (${pct}%)...`;
+            
+            // When 100% is reached, don't auto-play. Show the Enter button instead.
+            if (loadedImagesCount >= totalImagesToLoad && gridLoaded) {
+                document.getElementById('loading-text').innerText = "ASSETS LOADED";
+                document.getElementById('btn-enter').style.display = 'block';
+            }
+        }
+
+        // Triggered by the user clicking "ENTER MENU"
+        function enterMenu() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+            
+            const vidMenu = document.getElementById('vid-menu');
+            vidMenu.style.display = 'block';
+            
+            // Because this is triggered by a click, the browser allows sound!
+            vidMenu.play().catch(e => console.warn("Audio play blocked by browser:", e));
+        }
+
+        function loadImg(src) {
+            const img = new Image(); 
+            img.src = src;
+            img.onload = () => { 
+                loadedImagesCount++; 
+                updateLoadingScreen(); 
+            };
+            img.onerror = () => {
+                console.error("Missing asset:", src);
+                document.getElementById('loading-errors').innerHTML += `Missing: ${src}<br>`;
+                loadedImagesCount++; 
+                updateLoadingScreen();
+            };
+            return img;
+        }
+
+        for(let dir in charConfig) {
+            for(let act in charConfig[dir]) { totalImagesToLoad += charConfig[dir][act].frameCount; }
+        }
+
+        images.ship = loadImg(assetPaths.ship);
+        images.seaWaveTop = loadImg(assetPaths.seaWaveTop);
+        images.sea = assetPaths.sea.map(src => loadImg(src));
+        images.smoke = assetPaths.smoke.map(src => loadImg(src));
+        images.wave = assetPaths.wave.map(src => loadImg(src));
+        images.clouds = assetPaths.clouds.map(src => loadImg(src));
+
+        for (let i = 1; i <= 10; i++) {
+            images.portal.push(loadImg(`/Portal-Blast-1/Explosion_blue_circle${i}.png`));
+        }
+
+        for (const dir in charConfig) {
+            charImages[dir] = {};
+            for (const act in charConfig[dir]) {
+                charImages[dir][act] = [];
+                const anim = charConfig[dir][act];
+                for (let i = 0; i < anim.frameCount; i++) {
+                    const paddedNum = String(i).padStart(3, '0');
+                    charImages[dir][act].push(loadImg(`${anim.path}${anim.filePrefix}${paddedNum}.png`));
+                }
+            }
+        }
+
+        let currentShipBobOffset = 0;
+
+        // --- 2. GRID CONFIGURATION ---
+        let gridConfig = { angle: 82.5, squash: 0.55, scale: 0.6, yOffset: 40, xOffset: 0 }; 
+        const gridCols = 200;
+        const gridRows = 200;
+        let mapGrid = Array(gridCols).fill(0).map(() => Array(gridRows).fill(2)); 
+        const walkableValues = [1, 3, 4, 5];
+
+
+        async function loadGridData() {
+            try {
+                const response = await fetch('/Grid/Titanic-Ship-Grid.txt');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.map) mapGrid = data.map;
+                    if (data.config) {
+                        gridConfig = data.config;
+                        document.getElementById('grid-angle').value = gridConfig.angle;
+                        document.getElementById('val-rot').innerHTML = gridConfig.angle + '&deg;';
+                        document.getElementById('grid-squash').value = gridConfig.squash;
+                        document.getElementById('val-sq').innerText = gridConfig.squash;
+                        document.getElementById('grid-scale').value = gridConfig.scale;
+                        document.getElementById('val-sz').innerText = gridConfig.scale;
+                        document.getElementById('grid-xoff').value = gridConfig.xOffset || 0;
+                        document.getElementById('val-xoff').innerText = (gridConfig.xOffset || 0) + 'px';
+                        document.getElementById('grid-yoff').value = gridConfig.yOffset;
+                        document.getElementById('val-yoff').innerText = gridConfig.yOffset + 'px';
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading grid file, using defaults.");
+            }
+            gridLoaded = true;
+            updateLoadingScreen();
+        }
+        loadGridData();
+
+        function getTileW(drawW) { return (drawW / 200) * gridConfig.scale; }
+
+        function mapToScreen(col, row, drawX, drawY, drawW, drawH, tileW) {
+            const cx = drawX + drawW / 2 + (gridConfig.xOffset || 0);
+            const cy = drawY + drawH / 2 + gridConfig.yOffset; 
+            const gridX = (col - gridCols / 2) * tileW;
+            const gridY = (row - gridRows / 2) * tileW;
+            
+            const rad = gridConfig.angle * Math.PI / 180;
+            const cosA = Math.cos(rad); const sinA = Math.sin(rad);
+
+            const rx = gridX * cosA - gridY * sinA;
+            const ry = gridX * sinA + gridY * cosA;
+
+            return { x: cx + rx, y: cy + (ry * gridConfig.squash) };
+        }
+        
+        function screenToMap(worldX, worldY, drawX, drawY, drawW, drawH, tileW) {
+            const cx = drawX + drawW / 2 + (gridConfig.xOffset || 0);
+            const cy = drawY + drawH / 2 + gridConfig.yOffset; 
+            
+            const relX = worldX - cx;
+            const relY = (worldY - cy) / gridConfig.squash; 
+
+            const rad = gridConfig.angle * Math.PI / 180;
+            const cosA = Math.cos(-rad); const sinA = Math.sin(-rad);
+
+            const gridX = relX * cosA - relY * sinA;
+            const gridY = relX * sinA + relY * cosA;
+
+            return { col: Math.floor(gridX / tileW + gridCols / 2), row: Math.floor(gridY / tileW + gridRows / 2) };
+        }
+
+        let activeToolValue = 1; 
+        function setEditorTool(btnId, val) {
+            activeToolValue = val;
+            document.querySelectorAll('.editor-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + btnId).classList.add('active');
+            
+            const labels = ["ERASER (Clear)", "GREEN (Walk)", "RED (Block)", "PCLASS 1 (Gold)", "PCLASS 2 (Silver)", "PCLASS 3 (Bronze)"];
+            const colors = ["#94a3b8", "#4ade80", "#f87171", "#facc15", "#cbd5e1", "#ea580c"];
+            document.getElementById('tool-mode').innerText = labels[val];
+            document.getElementById('tool-mode').style.color = colors[val];
+        }
+
+        function clearGrid() { mapGrid = Array(gridCols).fill(0).map(() => Array(gridRows).fill(2)); saveHistory(); }
+
+        function exportGridTXT() {
+            const exportData = { config: gridConfig, map: mapGrid };
+            const dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "titanic_precision_grid.txt");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importGridTXT(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.map) mapGrid = data.map;
+                    if (data.config) {
+                        gridConfig = data.config;
+                        document.getElementById('grid-angle').value = gridConfig.angle;
+                        document.getElementById('val-rot').innerHTML = gridConfig.angle + '&deg;';
+                        document.getElementById('grid-squash').value = gridConfig.squash;
+                        document.getElementById('val-sq').innerText = gridConfig.squash;
+                        document.getElementById('grid-scale').value = gridConfig.scale;
+                        document.getElementById('val-sz').innerText = gridConfig.scale;
+                        document.getElementById('grid-xoff').value = gridConfig.xOffset || 0;
+                        document.getElementById('val-xoff').innerText = (gridConfig.xOffset || 0) + 'px';
+                        document.getElementById('grid-yoff').value = gridConfig.yOffset;
+                        document.getElementById('val-yoff').innerText = gridConfig.yOffset + 'px';
+                    }
+                    saveHistory();
+                } catch (err) { alert("Invalid grid file."); }
+            };
+            reader.readAsText(file);
+            event.target.value = ""; 
+        }
+
+        // --- 3. CAMERA & MOUSE SYSTEM ---
+        let camera = { x: 0, y: 0, zoom: 1 }; 
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let hasDragged = false; 
+
+        function constrainCamera() {
+            if (!images.ship || images.ship.width === 0) return;
+            const baseScale = Math.max(cw / images.ship.width, ch / images.ship.height);
+            const drawW = images.ship.width * baseScale;
+            const drawH = images.ship.height * baseScale;
+            const drawX = (cw - drawW) / 2;
+            const drawY = (ch - drawH) / 2;
+            const maxX = -drawX; const maxY = -drawY;
+            const minX = (cw / camera.zoom) - (drawX + drawW);
+            const minY = (ch / camera.zoom) - (drawY + drawH);
+            camera.x = Math.max(minX, Math.min(camera.x, maxX));
+            camera.y = Math.max(minY, Math.min(camera.y, maxY));
+        }
+
+        function centerCameraOnShip() {
+            if (!images.ship || images.ship.width === 0) return;
+            const baseScale = Math.max(cw / images.ship.width, ch / images.ship.height);
+            const drawW = images.ship.width * baseScale;
+            const drawH = images.ship.height * baseScale;
+            const drawX = (cw - drawW) / 2;
+            const drawY = (ch - drawH) / 2;
+            camera.x = (cw / 2 / camera.zoom) - (drawX + drawW / 2);
+            camera.y = (ch / 2 / camera.zoom) - (drawY + drawH / 2);
+            constrainCamera();
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState === 'form' || gameState === 'start' || gameState === 'cinematic') return;
+            isDragging = true; hasDragged = false;
+            dragStart.x = e.clientX / camera.zoom - camera.x;
+            dragStart.y = e.clientY / camera.zoom - camera.y;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                hasDragged = true;
+                camera.x = e.clientX / camera.zoom - dragStart.x;
+                camera.y = e.clientY / camera.zoom - dragStart.y;
+                constrainCamera(); 
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => { isDragging = false; });
+        canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+        canvas.addEventListener('mouseleave', () => { 
+            isDragging = false; 
+            if (isPainting) { isPainting = false; saveHistory(); }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            if (gameState === 'start' || gameState === 'cinematic') return;
+            e.preventDefault(); 
+            const mouseX = e.clientX; const mouseY = e.clientY;
+            const worldX = mouseX / camera.zoom - camera.x;
+            const worldY = mouseY / camera.zoom - camera.y;
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.max(1, Math.min(camera.zoom * zoomFactor, 10)); 
+            camera.x = mouseX / newZoom - worldX;
+            camera.y = mouseY / newZoom - worldY;
+            camera.zoom = newZoom;
+            constrainCamera(); 
+        }, { passive: false });
+
+        // --- 4. PLAYER & TELEPORTATION CONFIG ---
+        let player = {
+            x: 0, y: 0, baseSpeed: 0.6, direction: 'front', action: 'idle', frameIndex: 0, lastAnimUpdate: 0, animInterval: 80, baseScale: 0.035
+        };
+
+        let portalState = { active: false, frame: 0, targetX: 0, targetY: 0, phase: 'disappearing' };
+        let facingRed = false; 
+
+        const keys = { w: false, a: false, s: false, d: false, Shift: false };
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (keys.hasOwnProperty(k) || e.key === 'Shift') keys[e.key === 'Shift' ? 'Shift' : k] = true; 
+            
+            // BOOKING TRIGGER (Press U)
+            if (k === 'u' && gameState === 'sailing' && !portalState.active) {
+                const baseScale = Math.max(cw / images.ship.width, ch / images.ship.height);
+                const drawW = images.ship.width * baseScale;
+                const drawH = images.ship.height * baseScale;
+                const drawX = (cw - drawW) / 2; const drawY = (ch - drawH) / 2;
+                const tileW = getTileW(drawW);
+
+                const {col, row} = screenToMap(player.x, player.y - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW);
+                let pclassVal = 3; 
+                if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
+                    const cellVal = mapGrid[col][row];
+                    if (cellVal >= 3 && cellVal <= 5) pclassVal = cellVal - 2; 
+                }
+                
+                document.getElementById('in-pclass').value = pclassVal;
+                document.getElementById('booking-form').style.display = 'block';
+                gameState = 'form';
+            }
+        });
+
+        window.addEventListener('keyup', (e) => { 
+            const k = e.key.toLowerCase();
+            if (keys.hasOwnProperty(k) || e.key === 'Shift') keys[e.key === 'Shift' ? 'Shift' : k] = false; 
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState !== 'sailing' || hasDragged || images.ship.width === 0 || portalState.active) return;
+
+
+            const baseScale = Math.max(cw / images.ship.width, ch / images.ship.height);
+            const drawW = images.ship.width * baseScale;
+            const drawH = images.ship.height * baseScale;
+            const drawX = (cw - drawW) / 2; const drawY = (ch - drawH) / 2;
+            const tileW = getTileW(drawW);
+
+            const worldX = e.clientX / camera.zoom - camera.x;
+            const worldY = e.clientY / camera.zoom - camera.y;
+
+            const {col, row} = screenToMap(worldX, worldY - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW);
+
+            if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
+                const cellVal = mapGrid[col][row];
+                
+                // TELEPORT IF FACING RED
+                if (facingRed && walkableValues.includes(cellVal)) {
+                    portalState.active = true;
+                    portalState.frame = 0;
+                    const targetPos = mapToScreen(col, row, drawX, drawY, drawW, drawH, tileW);
+                    portalState.targetX = targetPos.x;
+                    portalState.targetY = targetPos.y;
+                    portalState.phase = 'disappearing';
+                } 
+            }
+        });
+
+        const timers = {
+            sea:   { lastUpdate: 0, interval: 600, index: 0, frames: 3 }, 
+            wave:  { lastUpdate: 0, interval: 400, index: 0, frames: 2 }, 
+            smoke: { lastUpdate: 0, interval: 150, index: 0, frames: 3 }  
+        };
+
+        const cloudsConfig = [
+            { id: 0, startY: 200, x: -2200, y: 2200, speedX: 1.9, speedY: -1.9, scale: 0.15 }, 
+            { id: 1, startY: 200, x: -800,  y: 500, speedX: 1.0, speedY: -0.65, scale: 0.30 }, 
+            { id: 2, startY: 200, x: -880,  y: 410, speedX: 0.9, speedY: -0.6, scale: 0.30 }  
+        ];
+
+        let gameState = 'start'; 
+        let predictionResult = null;
+        let timeOffset = 0; 
+        let initialCenterSet = false;
+        let portalAnimTimer = 0;
+
+        function startGame() {
+            const vidMenu = document.getElementById('vid-menu');
+            vidMenu.pause();
+            vidMenu.style.display = 'none';
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('title-bar').style.display = 'block';
+            document.getElementById('controls-hint').style.display = 'block';
+            gameState = 'sailing';
+        }
+
+        // --- 5. CINEMATICS & PREDICTION LOGIC ---
+        async function embraceFate() {
+            document.getElementById('booking-form').style.display = 'none';
+            const payload = { pclass: parseInt(document.getElementById('in-pclass').value), sex: 1, age: parseFloat(document.getElementById('in-age').value), sibsp: parseInt(document.getElementById('in-sibsp').value), parch: parseInt(document.getElementById('in-parch').value), fare: parseFloat(document.getElementById('in-fare').value), embarked: document.getElementById('in-embarked').value };
+            
+            try { 
+                const res = await fetch('/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+                predictionResult = await res.json(); 
+            } catch (err) { 
+                predictionResult = { survived: false, probability: 10.0 }; 
+            }
+            
+            camera.zoom = 1; 
+            centerCameraOnShip(); 
+            
+            gameState = 'cinematic';
+            document.getElementById('fade-screen').style.opacity = 1;
+            
+            setTimeout(() => {
+                playSinkingCinematic();
+            }, 1000); 
+        }
+
+        function playSinkingCinematic() {
+            document.getElementById('title-bar').style.display = 'none';
+            document.getElementById('controls-hint').style.display = 'none';
+            
+            const sinkingVid = document.getElementById('vid-sinking');
+            sinkingVid.load();
+            sinkingVid.style.display = 'block';
+            sinkingVid.play().catch(e => {
+                console.error("Autoplay blocked, showing outcome", e);
+                sinkingVid.style.display = 'none';
+                playOutcomeVideo();
+            });
+
+            sinkingVid.onended = () => {
+                sinkingVid.style.display = 'none';
+                playOutcomeVideo();
+            };
+        }
+
+        function playOutcomeVideo() {
+            if (predictionResult && predictionResult.survived) {
+                const surVid = document.getElementById('vid-survived');
+                surVid.load();
+                surVid.style.display = 'block';
+                surVid.play().catch(e => showFinalScreen(true));
+                surVid.onended = () => {
+                    surVid.style.display = 'none';
+                    showFinalScreen(true);
+                }
+            } else {
+                const perVid = document.getElementById('vid-perished');
+                perVid.load();
+                perVid.style.display = 'block';
+                perVid.play().catch(e => showFinalScreen(false));
+                perVid.onended = () => {
+                    perVid.style.display = 'none';
+                    showFinalScreen(false);
+                }
+            }
+        }
+        
+        function showFinalScreen(didSurvive) {
+            const screen = document.getElementById('outcome-screen');
+            const title = document.getElementById('outcome-title');
+            screen.style.display = 'flex';
+            
+            if (didSurvive) {
+                title.innerHTML = `<span class="survived-text">YOU SURVIVED!</span><br><span style="font-size:1.2rem;color:#A76336">CHANCE: ${predictionResult.probability}%</span>`;
+            } else {
+                title.innerHTML = `<span class="perished-text">YOU PERISHED.</span><br><span style="font-size:1.2rem;color:#5C5454">CHANCE: ${predictionResult ? predictionResult.probability : 0}%</span>`;
+            }
+        }
+
+        // --- 6. RENDER LOOP ---
+        function draw(timestamp) {
+            requestAnimationFrame(draw);
+
+            if (gameState === 'cinematic') return;
+
+            if (loadedImagesCount < totalImagesToLoad || !gridLoaded) return;
+
+            const baseScale = Math.max(cw / images.ship.width, ch / images.ship.height);
+            const drawW = images.ship.width * baseScale;
+            const drawH = images.ship.height * baseScale;
+            const drawX = (cw - drawW) / 2;
+            const drawY = (ch - drawH) / 2;
+            const tileW = getTileW(drawW);
+
+            if (!initialCenterSet) {
+                const cx = drawX + drawW / 2 + (gridConfig.xOffset || 0);
+                const cy = drawY + drawH / 2 + gridConfig.yOffset;
+                player.x = cx;
+                player.y = cy;
+                
+                let foundSafe = false;
+                const startGrid = screenToMap(player.x, player.y, drawX, drawY, drawW, drawH, tileW);
+                
+                if (!walkableValues.includes(mapGrid[startGrid.col][startGrid.row])) {
+                    outerloop: for (let radius = 1; radius < 20; radius++) {
+                        for (let x = startGrid.col - radius; x <= startGrid.col + radius; x++) {
+                            for (let y = startGrid.row - radius; y <= startGrid.row + radius; y++) {
+                                if (x >= 0 && x < gridCols && y >= 0 && y < gridRows) {
+                                    if (walkableValues.includes(mapGrid[x][y])) {
+                                        const newPos = mapToScreen(x, y, drawX, drawY, drawW, drawH, tileW);
+                                        player.x = newPos.x;
+                                        player.y = newPos.y;
+                                        foundSafe = true;
+                                        break outerloop;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                centerCameraOnShip();
+                initialCenterSet = true;
+            }
+
+            // ONLY BOB SHIP WHEN NOT IN EDITOR
+            timeOffset += 0.005;
+
+            currentShipBobOffset = Math.sin(timeOffset) * 12; 
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, ch);
+            gradient.addColorStop(0, "#1C1C24");
+            gradient.addColorStop(1, "#38bdf8");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, cw, ch);
+
+            ctx.save(); 
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(camera.x, camera.y);
+            ctx.imageSmoothingEnabled = false;
+
+            ['sea', 'wave', 'smoke'].forEach(key => {
+                const t = timers[key];
+                if (timestamp - t.lastUpdate > t.interval) {
+
+                    t.index = (t.index + 1) % t.frames;
+                    t.lastUpdate = timestamp;
+                }
+            });
+
+            ctx.drawImage(images.sea[timers.sea.index], drawX, drawY, drawW, drawH);
+
+            const bobbedY = drawY + currentShipBobOffset;
+            ctx.drawImage(images.ship, drawX, bobbedY, drawW, drawH);
+            ctx.drawImage(images.smoke[timers.smoke.index], drawX, bobbedY, drawW, drawH);
+
+            let lookX = player.x; let lookY = player.y;
+            if (player.direction === 'back') lookY -= 15;
+            if (player.direction === 'front') lookY += 15;
+            if (player.direction === 'left') lookX -= 15;
+            if (player.direction === 'right') lookX += 15;
+            
+            const lookGrid = screenToMap(lookX, lookY, drawX, drawY, drawW, drawH, tileW);
+            facingRed = false;
+            if (lookGrid.col >= 0 && lookGrid.col < gridCols && lookGrid.row >= 0 && lookGrid.row < gridRows) {
+                if (mapGrid[lookGrid.col][lookGrid.row] === 2) facingRed = true;
+            }
+
+            document.getElementById('teleport-warning').style.display = (facingRed && !portalState.active && gameState==='sailing') ? 'block' : 'none';
+
+            // TELEPORT GLOW RENDER & EDITOR GRID
+            ctx.lineWidth = 1;
+            
+           
+
+            const corners = [
+                screenToMap(-camera.x, -camera.y - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW),
+                screenToMap(-camera.x + cw/camera.zoom, -camera.y - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW),
+                screenToMap(-camera.x, -camera.y + ch/camera.zoom - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW),
+                screenToMap(-camera.x + cw/camera.zoom, -camera.y + ch/camera.zoom - currentShipBobOffset, drawX, drawY, drawW, drawH, tileW)
+            ];
+            
+            const minCol = Math.max(0, Math.min(...corners.map(c => c.col)) - 2);
+            const maxCol = Math.min(gridCols - 1, Math.max(...corners.map(c => c.col)) + 2);
+            const minRow = Math.max(0, Math.min(...corners.map(c => c.row)) - 2);
+            const maxRow = Math.min(gridRows - 1, Math.max(...corners.map(c => c.row)) + 2);
+
+            for (let x = minCol; x <= maxCol; x++) {
+                for (let y = minRow; y <= maxRow; y++) {
+                    const val = mapGrid[x][y];
+                    if (val > 0 && val !== 2) {
+                        const pos = mapToScreen(x, y, drawX, drawY, drawW, drawH, tileW);
+                        pos.y += currentShipBobOffset; 
+                        
+                        if (facingRed && walkableValues.includes(val) && gameState === 'sailing') {
+                            const pulse = (Math.sin(timestamp * 0.005) + 1) / 2; 
+                            ctx.fillStyle = `rgba(167, 99, 54, ${0.1 + pulse * 0.5})`; 
+                            ctx.beginPath();
+                            const rad = gridConfig.angle * Math.PI / 180;
+                            const expand = 0.5; 
+                            const cosA = Math.cos(rad) * (tileW + expand);
+                            const sinA = Math.sin(rad) * (tileW + expand);
+                            ctx.moveTo(pos.x - cosA, pos.y - sinA * gridConfig.squash);
+                            ctx.lineTo(pos.x + sinA, pos.y - cosA * gridConfig.squash);
+                            ctx.lineTo(pos.x + cosA, pos.y + sinA * gridConfig.squash);
+                            ctx.lineTo(pos.x - sinA, pos.y + cosA * gridConfig.squash);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+
+
+            // PLAYER MOVEMENT & PORTAL ANIMATION
+            if (gameState === 'sailing' || gameState === 'form') {
+                if (portalState.active) {
+                    if (timestamp - portalAnimTimer > 60) {
+                        portalState.frame++;
+                        portalAnimTimer = timestamp;
+                        if (portalState.frame >= 10) {
+                            if (portalState.phase === 'disappearing') {
+                                player.x = portalState.targetX;
+                                player.y = portalState.targetY;
+                                portalState.phase = 'reappearing';
+                                portalState.frame = 0;
+                            } else {
+                                portalState.active = false;
+                            }
+                        }
+                    }
+
+                    const portalImg = images.portal[Math.min(portalState.frame, 9)];
+                    if (portalImg && portalImg.complete) {
+                        const pSize = 70;
+                        const pX = (portalState.phase === 'disappearing' ? player.x : portalState.targetX) - pSize/2;
+                        const pY = (portalState.phase === 'disappearing' ? player.y : portalState.targetY) - pSize/2 + currentShipBobOffset;
+                        ctx.drawImage(portalImg, pX, pY, pSize, pSize);
+                    }
+                } 
+                else {
+                    let dx = 0; let dy = 0;
+                    let speed = keys.Shift ? player.baseSpeed * 2.2 : player.baseSpeed;
+                    let lastAction = player.action;
+
+                    if (gameState === 'sailing') {
+                        if (keys.w) { dy -= 1; player.direction = 'back'; }
+                        if (keys.s) { dy += 1; player.direction = 'front'; }
+                        if (keys.a) { dx -= 1; player.direction = 'left'; }
+                        if (keys.d) { dx += 1; player.direction = 'right'; }
+                    }
+
+                    if (dx !== 0 && dy !== 0) {
+                        dx /= Math.sqrt(2); dy /= Math.sqrt(2);
+                        player.direction = dx > 0 ? 'right' : 'left';
+                    }
+
+                    let moving = (dx !== 0 || dy !== 0);
+
+                    if (moving) {
+                        let nextX = player.x + dx * speed;
+                        let nextY = player.y + dy * speed;
+
+                        let allowMove = false;
+                        const {col, row} = screenToMap(nextX, nextY, drawX, drawY, drawW, drawH, tileW);
+                        
+                        if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
+                            if (walkableValues.includes(mapGrid[col][row])) allowMove = true;
+                        }
+
+                        if (allowMove) {
+                            player.x = nextX;
+                            player.y = nextY;
+                        }
+                    }
+
+                    if (moving) {
+                        player.action = keys.Shift ? 'running' : 'walking';
+                        player.animInterval = keys.Shift ? 50 : 80;
+                    } else {
+                        player.action = 'idle';
+                        player.animInterval = 80;
+                    }
+
+                    if (lastAction !== player.action) player.frameIndex = 0; 
+
+                    if (timestamp - player.lastAnimUpdate > player.animInterval) {
+                        const maxFrames = charConfig[player.direction][player.action].frameCount;
+                        if (maxFrames && maxFrames > 0) {
+                            player.frameIndex = (player.frameIndex + 1) % maxFrames;
+                        } else {
+                            player.frameIndex = 0;
+                        }
+                        player.lastAnimUpdate = timestamp;
+                    }
+
+                    const currentFrameImg = charImages[player.direction][player.action][player.frameIndex];
+                    if (currentFrameImg && currentFrameImg.complete) {
+                        const charDrawW = currentFrameImg.width * player.baseScale;
+                        const charDrawH = currentFrameImg.height * player.baseScale;
+                        ctx.drawImage(currentFrameImg, player.x - charDrawW/2, (player.y - charDrawH/2) + currentShipBobOffset, charDrawW, charDrawH);
+                    }
+
+                    if (!moving && gameState === 'sailing') {
+                        const arrowY = (player.y - 25) + currentShipBobOffset + Math.sin(timestamp * 0.005) * 5; 
+                        ctx.fillStyle = "#DF3D27";
+                        ctx.beginPath();
+                        ctx.moveTo(player.x, arrowY + 8);
+                        ctx.lineTo(player.x - 5, arrowY);
+                        ctx.lineTo(player.x + 5, arrowY);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            }
+
+            ctx.drawImage(images.seaWaveTop, drawX, drawY, drawW, drawH);
+            ctx.drawImage(images.wave[timers.wave.index], drawX, bobbedY, drawW, drawH);
+
+            cloudsConfig.forEach(c => {
+                const cloudImg = images.clouds[c.id];
+                ctx.drawImage(cloudImg, c.x, c.y, cloudImg.width * c.scale, cloudImg.height * c.scale);
+                if (gameState !== 'form' && gameState !== 'start') { c.x += c.speedX; c.y += c.speedY; }
+                if (c.y + (cloudImg.height * c.scale) < 0 || c.x > cw) {
+                    c.x = -(cloudImg.width * c.scale) - (Math.random() * 100); 
+                    c.y = c.startY + (Math.random() * 50); 
+                }
+            });
+
+            ctx.restore(); 
+        }
+        
+        requestAnimationFrame(draw);
+    </script>
+</body>
+</html>
